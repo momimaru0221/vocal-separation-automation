@@ -1,0 +1,72 @@
+version: 2
+updates:
+  # Pythonパッケージ（requirements.txt）
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    assignees:
+      - your-github-username
+    commit-message:
+      prefix: "deps(python)"
+      include: scope
+
+  # Poetry（poetry.lockを使用する場合）
+  - package-ecosystem: poetry
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - python
+    assignees:
+      - your-github-username
+    commit-message:
+      prefix: "deps(poetry)"
+
+  # npm(package.json)がある場合
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - javascript
+    assignees:
+      - your-github-username
+    commit-message:
+      prefix: "deps(npm)"
+
+  # Terraformモジュールの更新
+  - package-ecosystem: terraform
+    directory: "/terraform"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - terraform
+    assignees:
+      - your-github-username
+    commit-message:
+      prefix: "deps(terraform)"
+
+  # Ansible Galaxy roles (requirements.ymlなどで管理している場合)
+  - package-ecosystem: git
+    directory: "/ansible"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ansible
+    assignees:
+      - your-github-username
+    commit-message:
+      prefix: "deps(ansible)"

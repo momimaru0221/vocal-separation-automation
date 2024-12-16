@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   traefik:
     image: traefik:v2.9
@@ -11,20 +10,45 @@ services:
       - "traefik.http.middlewares.auth.basicauth.usersfile=/path/to/.htpasswd"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-  
+    restart: unless-stopped
+    networks:
+      - default
+
   minio:
     image: minio/minio:latest
+    env_file:
+      - .env
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data
     ports:
       - "9000:9000"
+    restart: unless-stopped
+    networks:
+      - default
 
   app:
     build: .
+    env_file:
+      - .env
     environment:
-      # アプリケーションの環境変数設定
+      APP_ENV: ${APP_ENV}
+      APP_DEBUG: ${APP_DEBUG}
     depends_on:
       - minio
       - traefik
+    restart: unless-stopped
+    networks:
+      - default
+    ports:
+      - "8000:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`localhost`)"
+      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.services.app.loadbalancer.server.port=8000"
+
+networks:
+  default:
+    driver: bridge

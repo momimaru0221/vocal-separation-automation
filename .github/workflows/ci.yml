@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  # PRが作成・更新されたときにLint/Test実行
+  pull_request:
+    branches: [ main ]
+  # PRマージ後にmainブランチへpushされた際にbuild-deploy実行
+  push:
+    branches: [ main ]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    # pull_requestイベント時のみ実行
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dev dependencies
+        run: pip install --quiet --no-cache-dir -r requirements-dev.txt
+
+      - name: Lint (pre-commit)
+        run: pre-commit run --all-files
+
+      - name: Run Tests with Coverage
+        run: pytest --cov=./
+
+      - name: Upload Coverage to Codecov
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  build-deploy:
+    runs-on: ubuntu-latest
+    # pushイベントでmainブランチへのpush時のみ実行
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Docker build
+        # docker compose v2利用 (alias: docker-compose)
+        run: docker compose build --pull
+
+      - name: Deploy (Blue/Green)
+        run: ./scripts/deploy_blue_green.sh
