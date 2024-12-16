@@ -1,26 +1,30 @@
-version: '3.8'
+version: '3.9'
 services:
-  web:
-    image: python:3.11
-    working_dir: /app
-    volumes:
-      - .:/app
-    command: sh -c "pip install -r requirements.txt && flask run --host=0.0.0.0 --port=5000"
+  traefik:
+    image: traefik:v2.9
+    command:
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
     ports:
-      - "5000:5000"
+      - "80:80"
+    labels:
+      - "traefik.http.middlewares.auth.basicauth.usersfile=/path/to/.htpasswd"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+  
+  minio:
+    image: minio/minio:latest
     environment:
-      FLASK_ENV: development
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data
+    ports:
+      - "9000:9000"
+
+  app:
+    build: .
+    environment:
+      # アプリケーションの環境変数設定
     depends_on:
-      - db
-      - redis
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
-
-  redis:
-    image: redis:7
+      - minio
+      - traefik
