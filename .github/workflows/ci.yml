@@ -1,7 +1,17 @@
 name: CI (Pull Request)
+
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
+
+permissions:
+  contents: read   # PRコメント作成などに必要
+  pull-requests: write
+
+concurrency:
+  # 同一PRで最新のジョブ以外はキャンセルする例
+  group: ${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint-test:
@@ -9,27 +19,97 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          cache: 'pip'
 
-      - name: Install Dependencies
+      - name: Install dev dependencies
         run: pip install -r requirements-dev.txt
 
+      # pre-commitによるLint & Formatチェック
       - name: Lint & Format Check (pre-commit)
-        run: pre-commit run --all-files
+        run: pre-commit run --all-files --show-diff-on-failure
 
+      # テスト＆カバレッジ（80%以上必須）
       - name: Run Tests with Coverage
-        run: pytest --cov=./
+        run: pytest --cov=./ --cov-report=xml --cov-fail-under=80
 
+      # Codecovでカバレッジアップロード
       - name: Upload Coverage to Codecov
+        if: success()
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: true
+
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [lint-test]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Trivy
+        run: |
+          TRIVY_VERSION=v0.45.1
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ./bin $TRIVY_VERSION
+          ./bin/trivy --version
+
+      # ファイルシステムスキャン（依存関係スキャン）
+      # 脆弱性を検出してもCIをfailさせないが、CRITICAL発生はイメージスキャンでfail
+      - name: Scan Dependencies
+        run: |
+          ./bin/trivy fs --severity CRITICAL,HIGH,MEDIUM,LOW --ignore-unfixed --exit-code 0 --format json . > dependency_report.json
+
+      - name: Build Docker image
+        run: docker build -t my-image:${{ github.event.pull_request.head.sha }} .
+
+      # Dockerイメージスキャン: CRITICAL発見時にはfail
+      - name: Scan Docker image
+        run: |
+          ./bin/trivy image --severity CRITICAL,HIGH,MEDIUM,LOW --ignore-unfixed --format json my-image:${{ github.event.pull_request.head.sha }} > image_report.json
+          CRITICAL_COUNT=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' image_report.json)
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "Critical vulnerabilities found in Docker image."
+            exit 1
+          fi
+
+      - name: Upload Scan Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-scan-reports
+          path: "*.json"
+
+      # スキャン結果をPRコメントで要約
+      - name: Post scan result comment
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const depReport = JSON.parse(fs.readFileSync('dependency_report.json', 'utf8'));
+            const imgReport = JSON.parse(fs.readFileSync('image_report.json', 'utf8'));
+
+            const countVulns = (report) => {
+              if (!report.Results) return 0;
+              return report.Results.reduce((acc, res) => {
+                return acc + (res.Vulnerabilities ? res.Vulnerabilities.length : 0);
+              }, 0);
+            };
+
+            const depVulnCount = countVulns(depReport);
+            const imgVulnCount = countVulns(imgReport);
+
+            let commentBody = "## Vulnerability Scan Report\n\n";
+            commentBody += `**Dependencies**: Found ${depVulnCount} vulnerabilities.\n`;
+            commentBody += `**Docker Image**: Found ${imgVulnCount} vulnerabilities.\n\n`;
+            commentBody += "Please review the attached reports for more details.";
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
