@@ -1,0 +1,16 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Docker build
+        run: docker-compose build
+
+      - name: Deploy (Blue/Green)
+        run: ./scripts/deploy_blue_green.sh
