@@ -1,4 +1,3 @@
-version: '3.9'
 services:
   traefik:
     image: traefik:v2.9
@@ -15,16 +14,24 @@ services:
   minio:
     image: minio/minio:latest
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data
     ports:
       - "9000:9000"
 
   app:
     build: .
+    ports:
+      - "8000:8000"
     environment:
-      # アプリケーションの環境変数設定
+      APP_ENV: ${APP_ENV}
+      APP_DEBUG: ${APP_DEBUG}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`localhost`)"
+      - "traefik.http.routers.app.entrypoints=web"
+      - "traefik.http.services.app.loadbalancer.server.port=8000"
     depends_on:
       - minio
       - traefik
