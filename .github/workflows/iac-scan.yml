@@ -67,7 +67,11 @@ jobs:
 
       - name: Set Plan Output
         id: set_plan_output
-        run: echo "stdout=$(<infrastructure/terraform/plan_output.txt)" >> $GITHUB_OUTPUT
+        shell: bash
+        run: |
+          echo "stdout<<EOF" >> $GITHUB_OUTPUT
+          cat infrastructure/terraform/plan_output.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Comment Terraform plan
         uses: marocchino/sticky-pull-request-comment@v2
