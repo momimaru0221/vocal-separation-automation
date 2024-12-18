@@ -35,9 +35,17 @@ jobs:
           terraform fmt -check -no-color
           terraform validate -no-color
 
+      - name: Prepare system for tfsec
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ca-certificates curl
+          sudo update-ca-certificates
+
       - name: Install tfsec
         run: |
-          curl -L https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o tfsec
+          curl -fL --retry 5 --retry-delay 5 \
+            https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 \
+            -o tfsec
           chmod +x tfsec
           sudo mv tfsec /usr/local/bin/
 
@@ -53,6 +61,7 @@ jobs:
         run: checkov -d . --framework terraform,kubernetes --quiet
 
       - name: Terraform Plan
+        id: plan
         working-directory: infrastructure/terraform
         run: terraform plan -no-color | tee plan_output.txt
 
