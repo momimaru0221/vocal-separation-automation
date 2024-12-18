@@ -35,14 +35,11 @@ jobs:
           terraform fmt -check -no-color
           terraform validate -no-color
 
-      - name: Prepare system for tfsec
+      - name: Install tfsec
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ca-certificates curl
           sudo update-ca-certificates
-
-      - name: Install tfsec
-        run: |
           curl -fL --retry 5 --retry-delay 5 \
             https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 \
             -o tfsec
