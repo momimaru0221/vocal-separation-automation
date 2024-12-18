@@ -35,23 +35,18 @@ jobs:
           terraform fmt -check -no-color
           terraform validate -no-color
 
-      - name: Install tfsec
+      - name: Install Security Tools (tfsec, checkov)
         run: |
           sudo apt-get update -y
           sudo apt-get install -y ca-certificates curl
           sudo update-ca-certificates
-          curl -fL --retry 5 --retry-delay 5 \
-            https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 \
-            -o tfsec
-          chmod +x tfsec
-          sudo mv tfsec /usr/local/bin/
+          curl -fL --retry 5 --retry-delay 5 https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 -o tfsec
+          chmod +x tfsec && sudo mv tfsec /usr/local/bin/
+          pip install checkov
 
       - name: tfsec Scan
         working-directory: infrastructure/terraform
         run: tfsec --no-colour --soft-fail
-
-      - name: Install checkov
-        run: pip install checkov
 
       - name: checkov Scan
         working-directory: infrastructure/terraform
